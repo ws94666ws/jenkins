@@ -67,6 +67,8 @@ import hudson.util.Retrier;
 import hudson.util.Service;
 import hudson.util.VersionNumber;
 import hudson.util.XStream2;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FilenameFilter;
@@ -86,12 +88,12 @@ import java.net.http.HttpRequest;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.FileTime;
 import java.security.CodeSource;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -121,8 +123,7 @@ import java.util.jar.Manifest;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletException;
+import java.util.stream.Stream;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParserFactory;
@@ -142,10 +143,12 @@ import jenkins.util.io.OnMaster;
 import jenkins.util.xml.RestrictiveEntityResolver;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
-import org.apache.commons.fileupload.FileItem;
-import org.apache.commons.fileupload.FileUploadException;
-import org.apache.commons.fileupload.disk.DiskFileItemFactory;
-import org.apache.commons.fileupload.servlet.ServletFileUpload;
+import org.apache.commons.fileupload2.core.DiskFileItem;
+import org.apache.commons.fileupload2.core.DiskFileItemFactory;
+import org.apache.commons.fileupload2.core.FileItem;
+import org.apache.commons.fileupload2.core.FileUploadException;
+import org.apache.commons.fileupload2.jakarta.JakartaServletDiskFileUpload;
+import org.apache.commons.fileupload2.jakarta.JakartaServletFileUpload;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
@@ -243,7 +246,7 @@ public abstract class PluginManager extends AbstractModelObject implements OnMas
             @Override
             @NonNull PluginManager doCreate(@NonNull Class<? extends PluginManager> klass,
                                             @NonNull Jenkins jenkins) throws ReflectiveOperationException {
-                return klass.getConstructor(ServletContext.class, File.class).newInstance(jenkins.servletContext, jenkins.getRootDir());
+                return klass.getConstructor(ServletContext.class, File.class).newInstance(jenkins.getServletContext(), jenkins.getRootDir());
             }
         },
         FILE {
@@ -655,7 +658,7 @@ public abstract class PluginManager extends AbstractModelObject implements OnMas
     protected @NonNull Set<String> loadPluginsFromWar(@NonNull String fromPath, @CheckForNull FilenameFilter filter) {
         Set<String> names = new HashSet<>();
 
-        ServletContext context = Jenkins.get().servletContext;
+        ServletContext context = Jenkins.get().getServletContext();
         Set<String> plugins = Util.fixNull(context.getResourcePaths(fromPath));
         Set<URL> copiedPlugins = new HashSet<>();
         Set<URL> dependencies = new HashSet<>();
@@ -719,7 +722,7 @@ public abstract class PluginManager extends AbstractModelObject implements OnMas
         String dependencySpec = manifest.getMainAttributes().getValue("Plugin-Dependencies");
         if (dependencySpec != null) {
             String[] dependencyTokens = dependencySpec.split(",");
-            ServletContext context = Jenkins.get().servletContext;
+            ServletContext context = Jenkins.get().getServletContext();
 
             for (String dependencyToken : dependencyTokens) {
                 if (dependencyToken.endsWith(";resolution:=optional")) {
@@ -1830,12 +1833,16 @@ public abstract class PluginManager extends AbstractModelObject implements OnMas
 
         @Override
         public void copy(File target) throws Exception {
-            fileItem.write(target);
+            fileItem.write(target.toPath());
         }
 
         @Override
         public void cleanup() {
-            fileItem.delete();
+            try {
+                fileItem.delete();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
         }
     }
 
@@ -1869,9 +1876,9 @@ public abstract class PluginManager extends AbstractModelObject implements OnMas
 
             String fileName = "";
             PluginCopier copier;
-            File tmpDir = Files.createTempDirectory("uploadDir").toFile();
-            ServletFileUpload upload = new ServletFileUpload(new DiskFileItemFactory(DiskFileItemFactory.DEFAULT_SIZE_THRESHOLD, tmpDir));
-            List<FileItem> items = upload.parseRequest(req);
+            Path tmpDir = Files.createTempDirectory("uploadDir");
+            JakartaServletFileUpload<DiskFileItem, DiskFileItemFactory> upload = new JakartaServletDiskFileUpload(DiskFileItemFactory.builder().setPath(tmpDir).get());
+            List<DiskFileItem> items = upload.parseRequest(req);
             if (StringUtils.isNotBlank(items.get(1).getString())) {
                 // this is a URL deployment
                 fileName = items.get(1).getString();
@@ -1884,13 +1891,17 @@ public abstract class PluginManager extends AbstractModelObject implements OnMas
             }
 
             if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
-                Arrays.stream(Objects.requireNonNull(tmpDir.listFiles())).forEach((file -> {
-                    try {
-                        Files.setPosixFilePermissions(file.toPath(), EnumSet.of(OWNER_READ, OWNER_WRITE));
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                }));
+                try (Stream<Path> files = Files.list(tmpDir)) {
+                    files.forEach(file -> {
+                        try {
+                            Files.setPosixFilePermissions(file, EnumSet.of(OWNER_READ, OWNER_WRITE));
+                        } catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                    });
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
             }
 
             if ("".equals(fileName)) {
@@ -1913,9 +1924,7 @@ public abstract class PluginManager extends AbstractModelObject implements OnMas
                 throw new ServletException(e);
             }
             copier.cleanup();
-            if (!tmpDir.delete()) {
-                System.err.println("Failed to delete temporary directory: " + tmpDir);
-            }
+            Files.deleteIfExists(tmpDir);
 
             final String baseName = identifyPluginShortName(t);
 

@@ -35,12 +35,12 @@ import static hudson.init.InitMilestone.JOB_CONFIG_ADAPTED;
 import static hudson.init.InitMilestone.JOB_LOADED;
 import static hudson.init.InitMilestone.PLUGINS_PREPARED;
 import static hudson.init.InitMilestone.SYSTEM_CONFIG_LOADED;
+import static jakarta.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
+import static jakarta.servlet.http.HttpServletResponse.SC_NOT_FOUND;
 import static java.util.logging.Level.FINE;
 import static java.util.logging.Level.INFO;
 import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
-import static javax.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
-import static javax.servlet.http.HttpServletResponse.SC_NOT_FOUND;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.inject.Inject;
@@ -209,6 +209,11 @@ import hudson.views.DefaultViewsTabBar;
 import hudson.views.MyViewsTabBar;
 import hudson.views.ViewsTabBar;
 import hudson.widgets.Widget;
+import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -256,11 +261,6 @@ import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import javax.crypto.SecretKey;
-import javax.servlet.RequestDispatcher;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletException;
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletResponse;
 import jenkins.AgentProtocol;
 import jenkins.ExtensionComponentSet;
 import jenkins.ExtensionRefreshException;
@@ -736,8 +736,17 @@ public class Jenkins extends AbstractCIBase implements DirectlyModifiableTopLeve
     @Deprecated
     public final transient NodeProvisioner overallNodeProvisioner = unlabeledNodeProvisioner;
 
+    /**
+     * @deprecated use {@link #getServletContext}
+     */
+    @Deprecated
+    public final transient javax.servlet.ServletContext servletContext;
 
-    public final transient ServletContext servletContext;
+    private final transient ServletContext jakartaServletContext;
+
+    public ServletContext getServletContext() {
+        return this.jakartaServletContext;
+    }
 
     /**
      * Transient action list. Useful for adding navigation items to the navigation bar
@@ -914,7 +923,8 @@ public class Jenkins extends AbstractCIBase implements DirectlyModifiableTopLeve
         // As Jenkins is starting, grant this process full control
         try (ACLContext ctx = ACL.as2(ACL.SYSTEM2)) {
             this.root = root;
-            this.servletContext = context;
+            this.jakartaServletContext = context;
+            this.servletContext = javax.servlet.ServletContext.fromJakartServletContext(context);
             computeVersion(context);
             if (theInstance != null)
                 throw new IllegalStateException("second instance");
@@ -964,7 +974,7 @@ public class Jenkins extends AbstractCIBase implements DirectlyModifiableTopLeve
             if (pluginManager == null)
                 pluginManager = PluginManager.createDefault(this);
             this.pluginManager = pluginManager;
-            WebApp webApp = WebApp.get(servletContext);
+            WebApp webApp = WebApp.get(getServletContext());
             // JSON binding needs to be able to see all the classes from all the plugins
             webApp.setClassLoader(pluginManager.uberClassLoader);
             webApp.setJsonInErrorMessageSanitizer(RedactSecretJsonInErrorMessageSanitizer.INSTANCE);
@@ -982,7 +992,7 @@ public class Jenkins extends AbstractCIBase implements DirectlyModifiableTopLeve
             webApp.setDispatchValidator(new StaplerDispatchValidator());
             webApp.setFilteredDispatchTriggerListener(actionListener);
 
-            adjuncts = new AdjunctManager(servletContext, pluginManager.uberClassLoader, "adjuncts/" + SESSION_HASH, TimeUnit.DAYS.toMillis(365));
+            adjuncts = new AdjunctManager(getServletContext(), pluginManager.uberClassLoader, "adjuncts/" + SESSION_HASH, TimeUnit.DAYS.toMillis(365));
 
             ClassFilterImpl.register();
 
@@ -2753,7 +2763,7 @@ public class Jenkins extends AbstractCIBase implements DirectlyModifiableTopLeve
      */
     private void resetFilter(@CheckForNull SecurityRealm securityRealm, @CheckForNull IdStrategy oldUserIdStrategy) {
         try {
-            HudsonFilter filter = HudsonFilter.get(servletContext);
+            HudsonFilter filter = HudsonFilter.get(getServletContext());
             if (filter == null) {
                 // Fix for JENKINS-3069: This filter is not necessarily initialized before the servlets.
                 // when HudsonFilter does come back, it'll initialize itself.
@@ -4387,7 +4397,7 @@ public class Jenkins extends AbstractCIBase implements DirectlyModifiableTopLeve
         getLifecycle().onReload(getAuthentication2().getName(), null);
 
         // engage "loading ..." UI and then run the actual task in a separate thread
-        WebApp.get(servletContext).setApp(new HudsonIsLoading());
+        WebApp.get(getServletContext()).setApp(new HudsonIsLoading());
 
         new Thread("Jenkins config reload thread") {
             @Override
@@ -4397,7 +4407,7 @@ public class Jenkins extends AbstractCIBase implements DirectlyModifiableTopLeve
                     getLifecycle().onReady();
                 } catch (Exception e) {
                     LOGGER.log(SEVERE, "Failed to reload Jenkins config", e);
-                    new JenkinsReloadFailed(e).publish(servletContext, root);
+                    new JenkinsReloadFailed(e).publish(getServletContext(), root);
                 }
             }
         }.start();
@@ -4426,7 +4436,7 @@ public class Jenkins extends AbstractCIBase implements DirectlyModifiableTopLeve
 
         User.reload();
         queue.load();
-        WebApp.get(servletContext).setApp(this);
+        WebApp.get(getServletContext()).setApp(this);
     }
 
     /**
@@ -4589,7 +4599,7 @@ public class Jenkins extends AbstractCIBase implements DirectlyModifiableTopLeve
      */
     public void restart() throws RestartNotSupportedException {
         final Lifecycle lifecycle = restartableLifecycle();
-        servletContext.setAttribute("app", new HudsonIsRestarting());
+        getServletContext().setAttribute("app", new HudsonIsRestarting());
 
         new Thread("restart thread") {
             final String exitUser = getAuthentication2().getName();
@@ -4642,7 +4652,7 @@ public class Jenkins extends AbstractCIBase implements DirectlyModifiableTopLeve
                     doQuietDown(true, 0, message, true);
                     // Make sure isQuietingDown is still true.
                     if (isQuietingDown()) {
-                        servletContext.setAttribute("app", new HudsonIsRestarting(true));
+                        getServletContext().setAttribute("app", new HudsonIsRestarting(true));
                         // give some time for the browser to load the "reloading" page
                         lifecycle.onStatusUpdate("Restart in 10 seconds");
                         Thread.sleep(TimeUnit.SECONDS.toMillis(10));

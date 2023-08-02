@@ -28,7 +28,6 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.EnvVars;
 import hudson.FilePath;
 import hudson.Launcher;
-import hudson.Util;
 import hudson.tasks.BuildWrapper;
 import hudson.util.VariableResolver;
 import java.io.File;
@@ -36,15 +35,17 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
-import java.io.UnsupportedEncodingException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
+import java.util.Objects;
 import java.util.regex.Pattern;
 import jenkins.util.SystemProperties;
-import org.apache.commons.fileupload.FileItem;
-import org.apache.commons.fileupload.FileItemHeaders;
-import org.apache.commons.fileupload.disk.DiskFileItem;
-import org.apache.commons.fileupload.util.FileItemHeadersImpl;
+import org.apache.commons.fileupload2.core.DiskFileItem;
+import org.apache.commons.fileupload2.core.FileItem;
+import org.apache.commons.fileupload2.core.FileItemHeaders;
+import org.apache.commons.fileupload2.core.FileItemHeadersProvider;
 import org.apache.commons.io.FilenameUtils;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
@@ -98,7 +99,7 @@ public class FileParameterValue extends ParameterValue {
     }
 
     public FileParameterValue(String name, File file, String originalFileName) {
-        this(name, new FileItemImpl(file), originalFileName);
+        this(name, new FileItemImpl(file.toPath()), originalFileName);
     }
 
     protected FileParameterValue(String name, FileItem file, String originalFileName) {
@@ -247,21 +248,18 @@ public class FileParameterValue extends ParameterValue {
     }
 
     /**
-     * Default implementation from {@link File}.
+     * Default implementation from {@link Path}.
      */
     public static final class FileItemImpl implements FileItem {
-        private final File file;
+        private final Path file;
 
-        public FileItemImpl(File file) {
-            if (file == null) {
-                throw new NullPointerException("file");
-            }
-            this.file = file;
+        public FileItemImpl(Path file) {
+            this.file = Objects.requireNonNull(file);
         }
 
         @Override
         public InputStream getInputStream() throws IOException {
-            return Files.newInputStream(Util.fileToPath(file));
+            return Files.newInputStream(file);
         }
 
         @Override
@@ -271,7 +269,12 @@ public class FileParameterValue extends ParameterValue {
 
         @Override
         public String getName() {
-            return file.getName();
+            Path fileName = file.getFileName();
+            if (fileName == null) {
+                throw new InvalidPathException(file.toString(), "path has zero elements");
+            } else {
+                return fileName.toString();
+            }
         }
 
         @Override
@@ -281,21 +284,25 @@ public class FileParameterValue extends ParameterValue {
 
         @Override
         public long getSize() {
-            return file.length();
-        }
-
-        @Override
-        public byte[] get() {
             try {
-                return Files.readAllBytes(file.toPath());
+                return Files.size(file);
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
         }
 
         @Override
-        public String getString(String encoding) throws UnsupportedEncodingException {
-            return new String(get(), encoding);
+        public byte[] get() {
+            try {
+                return Files.readAllBytes(file);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        @Override
+        public String getString(Charset toCharset) throws IOException {
+            return new String(get(), toCharset);
         }
 
         @Override
@@ -304,17 +311,19 @@ public class FileParameterValue extends ParameterValue {
         }
 
         @Override
-        public void write(File to) throws Exception {
-            new FilePath(file).copyTo(new FilePath(to));
+        public FileItem write(Path to) throws IOException {
+            try {
+                new FilePath(file.toFile()).copyTo(new FilePath(to.toFile()));
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            return this;
         }
 
         @Override
-        public void delete() {
-            try {
-                Files.deleteIfExists(file.toPath());
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+        public FileItem delete() throws IOException {
+            Files.deleteIfExists(file);
+            return this;
         }
 
         @Override
@@ -323,7 +332,8 @@ public class FileParameterValue extends ParameterValue {
         }
 
         @Override
-        public void setFieldName(String name) {
+        public FileItem setFieldName(String name) {
+            return this;
         }
 
         @Override
@@ -332,22 +342,23 @@ public class FileParameterValue extends ParameterValue {
         }
 
         @Override
-        public void setFormField(boolean state) {
+        public FileItem setFormField(boolean state) {
+            return this;
         }
 
         @Override
-        @Deprecated
         public OutputStream getOutputStream() throws IOException {
-            return Files.newOutputStream(Util.fileToPath(file));
+            return Files.newOutputStream(file);
         }
 
         @Override
         public FileItemHeaders getHeaders() {
-            return new FileItemHeadersImpl();
+            throw new UnsupportedOperationException();
         }
 
         @Override
-        public void setHeaders(FileItemHeaders headers) {
+        public FileItemHeadersProvider setHeaders(FileItemHeaders headers) {
+            throw new UnsupportedOperationException();
         }
     }
 }

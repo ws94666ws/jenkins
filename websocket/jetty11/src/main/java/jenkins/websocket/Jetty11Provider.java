@@ -24,13 +24,13 @@
 
 package jenkins.websocket;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.WebSocketListener;
 import org.eclipse.jetty.websocket.api.WriteCallback;
@@ -43,23 +43,23 @@ import org.kohsuke.accmod.restrictions.NoExternalUse;
 
 @Restricted(NoExternalUse.class)
 @MetaInfServices(Provider.class)
-public class Jetty10Provider implements Provider {
+public class Jetty11Provider implements Provider {
 
     /**
      * Number of seconds a WebsocketConnection may stay idle until it expires.
      * Zero to disable.
      * This value must be higher than the <code>jenkins.websocket.pingInterval</code>.
-     * Per <a href=https://www.eclipse.org/jetty/documentation/jetty-10/programming-guide/index.html#pg-websocket-session-ping>Jetty 10 documentation</a>
+     * Per <a href=https://www.eclipse.org/jetty/documentation/jetty-11/programming-guide/index.html#pg-websocket-session-ping>Jetty 11 documentation</a>
      * a ping mechanism should keep the websocket active. Therefore, the idle timeout must be higher than the ping
      * interval to avoid timeout issues.
      */
     private static long IDLE_TIMEOUT_SECONDS = Long.getLong("jenkins.websocket.idleTimeout", 60L);
 
-    private static final String ATTR_LISTENER = Jetty10Provider.class.getName() + ".listener";
+    private static final String ATTR_LISTENER = Jetty11Provider.class.getName() + ".listener";
 
     private boolean initialized = false;
 
-    public Jetty10Provider() {
+    public Jetty11Provider() {
         JettyWebSocketServerContainer.class.hashCode();
     }
 
@@ -74,12 +74,12 @@ public class Jetty10Provider implements Provider {
     public Handler handle(HttpServletRequest req, HttpServletResponse rsp, Listener listener) throws Exception {
         init(req);
         req.setAttribute(ATTR_LISTENER, listener);
-        // TODO Jetty 10 has no obvious equivalent to WebSocketServerFactory.isUpgradeRequest; RFC6455Negotiation?
+        // TODO Jetty 11 has no obvious equivalent to WebSocketServerFactory.isUpgradeRequest; RFC6455Negotiation?
         if (!"websocket".equalsIgnoreCase(req.getHeader("Upgrade"))) {
             rsp.sendError(HttpServletResponse.SC_BAD_REQUEST, "only WS connections accepted here");
             return null;
         }
-        if (!JettyWebSocketServerContainer.getContainer(req.getServletContext()).upgrade(Jetty10Provider::createWebSocket, req, rsp)) {
+        if (!JettyWebSocketServerContainer.getContainer(req.getServletContext()).upgrade(Jetty11Provider::createWebSocket, req, rsp)) {
             rsp.sendError(HttpServletResponse.SC_BAD_REQUEST, "did not manage to upgrade");
             return null;
         }

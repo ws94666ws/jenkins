@@ -32,9 +32,9 @@ THE SOFTWARE.
     <relativePath>../..</relativePath>
   </parent>
 
-  <artifactId>websocket-jetty10</artifactId>
-  <name>Jetty 10 implementation for WebSocket</name>
-  <description>An implementation of the WebSocket handler that works with Jetty 10.</description>
+  <artifactId>websocket-jetty11</artifactId>
+  <name>Jetty 11 implementation for WebSocket</name>
+  <description>An implementation of the WebSocket handler that works with Jetty 11.</description>
 
   <dependencyManagement>
     <dependencies>

@@ -27,8 +27,8 @@ package lib.layout;
 import static org.junit.Assert.assertTrue;
 
 import hudson.model.UnprotectedRootAction;
+import jakarta.servlet.ServletException;
 import java.io.IOException;
-import javax.servlet.ServletException;
 import org.htmlunit.html.HtmlElementUtil;
 import org.htmlunit.html.HtmlPage;
 import org.junit.Rule;
