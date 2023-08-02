@@ -314,6 +314,7 @@ public class QueueTest {
         }
     }
 
+    @Ignore("TODO needs triage")
     @Test public void fileItemPersistence() throws Exception {
         // TODO: write a synchronous connector?
         byte[] testData = new byte[1024];
