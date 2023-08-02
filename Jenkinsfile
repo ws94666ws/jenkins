@@ -239,6 +239,6 @@ athAxes.values().combinations {
 }
 
 builds.failFast = failFast
-builds.remove('ath') // TODO needs triage
+builds.remove('ath-linux-jdk17-firefox') // TODO needs triage
 parallel builds
 infra.maybePublishIncrementals()
