@@ -89,6 +89,10 @@ public abstract class CrumbIssuer implements Describable<CrumbIssuer>, Extension
         return crumb;
     }
 
+    public String getCrumb(StaplerRequest request) {
+        return getCrumb((ServletRequest) request);
+    }
+
     /**
      * @deprecated use {@link #getCrumb(ServletRequest)}
      */
@@ -132,6 +136,10 @@ public abstract class CrumbIssuer implements Describable<CrumbIssuer>, Extension
         String crumbSalt = desc.getCrumbSalt();
 
         return validateCrumb(request, crumbSalt, parser.get(crumbField));
+    }
+
+    public boolean validateCrumb(StaplerRequest request, MultipartFormDataParser parser) {
+        return validateCrumb((ServletRequest) request, parser);
     }
 
     /**

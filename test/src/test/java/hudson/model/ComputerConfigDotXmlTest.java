@@ -61,7 +61,6 @@ import org.htmlunit.WebRequest;
 import org.htmlunit.WebResponse;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -128,7 +127,6 @@ public class ComputerConfigDotXmlTest {
         assertThrows(AccessDeniedException3.class, () -> computer.doConfigDotXml(req, rsp));
     }
 
-    @Ignore("Mockito cannot deal with bridge methods")
     @Test
     public void configXmlGetShouldYieldNodeConfiguration() throws Exception {
 
