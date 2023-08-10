@@ -601,10 +601,34 @@ public class Functions {
         return null;
     }
 
+    public static Cookie getCookie(StaplerRequest req, String name) {
+        return getCookie((HttpServletRequest) req, name);
+    }
+
+    /**
+     * @deprecated use {@link #getCookie(HttpServletRequest, String)}
+     */
+    @Deprecated
+    public static javax.servlet.http.Cookie getCookie(javax.servlet.http.HttpServletRequest req, String name) {
+        return javax.servlet.http.Cookie.fromJakartaServletHttpCookie(getCookie(req.toJakartaHttpServletRequest(), name));
+    }
+
     public static String getCookie(HttpServletRequest req, String name, String defaultValue) {
         Cookie c = getCookie(req, name);
         if (c == null || c.getValue() == null) return defaultValue;
         return c.getValue();
+    }
+
+    public static String getCookie(StaplerRequest req, String name, String defaultValue) {
+        return getCookie((HttpServletRequest) req, name, defaultValue);
+    }
+
+    /**
+     * @deprecated use {@link #getCookie(HttpServletRequest, String, String)}
+     */
+    @Deprecated
+    public static String getCookie(javax.servlet.http.HttpServletRequest req, String name, String defaultValue) {
+        return getCookie(req.toJakartaHttpServletRequest(), name, defaultValue);
     }
 
     private static final Pattern ICON_SIZE = Pattern.compile("\\d+x\\d+");
