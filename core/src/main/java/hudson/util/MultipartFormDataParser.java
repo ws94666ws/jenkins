@@ -24,6 +24,7 @@
 
 package hudson.util;
 
+import com.infradna.tool.bridge_method_injector.WithBridgeMethods;
 import edu.umd.cs.findbugs.annotations.CheckForNull;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -108,14 +109,27 @@ public class MultipartFormDataParser implements AutoCloseable {
         this(request, FILEUPLOAD_MAX_FILES, FILEUPLOAD_MAX_FILE_SIZE, FILEUPLOAD_MAX_SIZE);
     }
 
+    /**
+     * @deprecated use {@link #MultipartFormDataParser(HttpServletRequest)}
+     */
+    @Deprecated
+    public MultipartFormDataParser(javax.servlet.http.HttpServletRequest request) throws ServletException {
+        this(request.toJakartaHttpServletRequest(), FILEUPLOAD_MAX_FILES, FILEUPLOAD_MAX_FILE_SIZE, FILEUPLOAD_MAX_SIZE);
+    }
+
     public String get(String key) {
         FileItem fi = byName.get(key);
         if (fi == null)    return null;
         return fi.getString();
     }
 
+    @WithBridgeMethods(value = org.apache.commons.fileupload.FileItem.class, adapterMethod = "fromFileUpload2FileItem")
     public FileItem getFileItem(String key) {
         return byName.get(key);
+    }
+
+    private Object fromFileUpload2FileItem(FileItem fileItem, Class<?> type) {
+        return org.apache.commons.fileupload.FileItem.fromFileUpload2FileItem(fileItem);
     }
 
     /**

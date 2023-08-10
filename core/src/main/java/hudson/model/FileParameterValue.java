@@ -24,6 +24,7 @@
 
 package hudson.model;
 
+import com.infradna.tool.bridge_method_injector.WithBridgeMethods;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.EnvVars;
 import hudson.FilePath;
@@ -147,8 +148,13 @@ public class FileParameterValue extends ParameterValue {
         return originalFileName;
     }
 
+    @WithBridgeMethods(value = org.apache.commons.fileupload.FileItem.class, adapterMethod = "fromFileUpload2FileItem")
     public FileItem getFile() {
         return file;
+    }
+
+    private Object fromFileUpload2FileItem(FileItem fileItem, Class<?> type) {
+        return org.apache.commons.fileupload.FileItem.fromFileUpload2FileItem(fileItem);
     }
 
     @Override
