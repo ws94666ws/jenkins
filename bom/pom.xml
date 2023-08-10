@@ -42,7 +42,7 @@ THE SOFTWARE.
     <commons-fileupload2.version>2.0.0-M1</commons-fileupload2.version>
     <slf4jVersion>2.0.7</slf4jVersion>
     <!-- TODO https://ci.jenkins.io/job/Core/job/stapler/job/PR-482/ -->
-    <stapler.version>1826.v22868c6b_5497</stapler.version>
+    <stapler.version>1827.v228fd18a_1f7d</stapler.version>
     <groovy.version>2.4.21</groovy.version>
   </properties>
 
