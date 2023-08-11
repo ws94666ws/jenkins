@@ -29,6 +29,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.EnvVars;
 import hudson.FilePath;
 import hudson.Launcher;
+import hudson.Util;
 import hudson.tasks.BuildWrapper;
 import hudson.util.VariableResolver;
 import java.io.File;
@@ -38,13 +39,12 @@ import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.util.Objects;
 import java.util.regex.Pattern;
 import jenkins.util.SystemProperties;
 import org.apache.commons.fileupload2.core.DiskFileItem;
 import org.apache.commons.fileupload2.core.FileItem;
+import org.apache.commons.fileupload2.core.FileItemFactory;
 import org.apache.commons.fileupload2.core.FileItemHeaders;
 import org.apache.commons.fileupload2.core.FileItemHeadersProvider;
 import org.apache.commons.io.FilenameUtils;
@@ -100,7 +100,7 @@ public class FileParameterValue extends ParameterValue {
     }
 
     public FileParameterValue(String name, File file, String originalFileName) {
-        this(name, new FileItemImpl(file.toPath()), originalFileName);
+        this(name, new FileItemImpl(file), originalFileName);
     }
 
     protected FileParameterValue(String name, FileItem file, String originalFileName) {
@@ -254,18 +254,21 @@ public class FileParameterValue extends ParameterValue {
     }
 
     /**
-     * Default implementation from {@link Path}.
+     * Default implementation from {@link File}.
      */
     public static final class FileItemImpl implements FileItem {
-        private final Path file;
+        private final File file;
 
-        public FileItemImpl(Path file) {
-            this.file = Objects.requireNonNull(file);
+        public FileItemImpl(File file) {
+            if (file == null) {
+                throw new NullPointerException("file");
+            }
+            this.file = file;
         }
 
         @Override
         public InputStream getInputStream() throws IOException {
-            return Files.newInputStream(file);
+            return Files.newInputStream(Util.fileToPath(file));
         }
 
         @Override
@@ -275,12 +278,7 @@ public class FileParameterValue extends ParameterValue {
 
         @Override
         public String getName() {
-            Path fileName = file.getFileName();
-            if (fileName == null) {
-                throw new InvalidPathException(file.toString(), "path has zero elements");
-            } else {
-                return fileName.toString();
-            }
+            return file.getName();
         }
 
         @Override
@@ -290,17 +288,13 @@ public class FileParameterValue extends ParameterValue {
 
         @Override
         public long getSize() {
-            try {
-                return Files.size(file);
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+            return file.length();
         }
 
         @Override
         public byte[] get() {
             try {
-                return Files.readAllBytes(file);
+                return Files.readAllBytes(file.toPath());
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
@@ -319,7 +313,7 @@ public class FileParameterValue extends ParameterValue {
         @Override
         public FileItem write(Path to) throws IOException {
             try {
-                new FilePath(file.toFile()).copyTo(new FilePath(to.toFile()));
+                new FilePath(file).copyTo(new FilePath(to.toFile()));
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
@@ -328,7 +322,7 @@ public class FileParameterValue extends ParameterValue {
 
         @Override
         public FileItem delete() throws IOException {
-            Files.deleteIfExists(file);
+            Files.deleteIfExists(Util.fileToPath(file));
             return this;
         }
 
@@ -353,18 +347,19 @@ public class FileParameterValue extends ParameterValue {
         }
 
         @Override
+        @Deprecated
         public OutputStream getOutputStream() throws IOException {
-            return Files.newOutputStream(file);
+            return Files.newOutputStream(Util.fileToPath(file));
         }
 
         @Override
         public FileItemHeaders getHeaders() {
-            throw new UnsupportedOperationException();
+            return FileItemFactory.AbstractFileItemBuilder.newFileItemHeaders();
         }
 
         @Override
         public FileItemHeadersProvider setHeaders(FileItemHeaders headers) {
-            throw new UnsupportedOperationException();
+            return this;
         }
     }
 }
