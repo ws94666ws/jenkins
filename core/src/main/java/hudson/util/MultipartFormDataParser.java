@@ -44,6 +44,7 @@ import org.apache.commons.fileupload2.jakarta.JakartaServletFileUpload;
 import org.apache.commons.lang.ArrayUtils;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
+import org.kohsuke.stapler.StaplerRequest;
 
 /**
  * Wraps commons file-upload and handles a "multipart/form-data" form submission
@@ -107,6 +108,10 @@ public class MultipartFormDataParser implements AutoCloseable {
 
     public MultipartFormDataParser(HttpServletRequest request) throws ServletException {
         this(request, FILEUPLOAD_MAX_FILES, FILEUPLOAD_MAX_FILE_SIZE, FILEUPLOAD_MAX_SIZE);
+    }
+
+    public MultipartFormDataParser(StaplerRequest request) throws ServletException {
+        this((HttpServletRequest) request);
     }
 
     /**
